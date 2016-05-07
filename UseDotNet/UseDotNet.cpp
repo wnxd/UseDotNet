@@ -55,7 +55,7 @@ array<T^>^ CArray2array(CArray<HOBJECT> arr)
 	return arr2;
 }
 
-bool LoadLibrary(LPSTR path)
+bool WINAPI LoadLibrary(LPSTR path)
 {
 	Assembly^ assembly;
 	assembly = Assembly::LoadFrom(LPSTR2String(path));
@@ -71,7 +71,7 @@ bool LoadLibrary(LPSTR path)
 	return false;
 }
 
-HTYPE FindType(LPSTR fullname)
+HTYPE WINAPI FindType(LPSTR fullname)
 {
 	String^ name = LPSTR2String(fullname);
 	Type^ type;
@@ -94,7 +94,7 @@ HTYPE FindType(LPSTR fullname)
 	return Object2HOBJECT(type);
 }
 
-HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params)
+HOBJECT WINAPI CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 {
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
@@ -103,7 +103,7 @@ HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 	return Object2HOBJECT(obj);
 }
 
-HSTRING CreateString(LPSTR str)
+HSTRING WINAPI CreateString(LPSTR str)
 {
 	return Object2HOBJECT(LPSTR2String(str));
 }
@@ -116,7 +116,7 @@ Method_CreateValueType(Short, short, HSHORT)
 Method_CreateValueType(Float, float, HFLOAT)
 Method_CreateValueType(Double, double, HDOUBLE)
 
-LPSTR GetString(HSTRING str)
+LPSTR WINAPI GetString(HSTRING str)
 {
 	return String2LPSTR(HOBJECT2Type(str, String));
 }
@@ -129,7 +129,7 @@ Method_Object2ValueType(Short, HSHORT, short)
 Method_Object2ValueType(Float, HFLOAT, float)
 Method_Object2ValueType(Double, HDOUBLE, double)
 
-HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
+HMETHOD WINAPI FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
 {
 	array<Type^>^ types;
 	if (args == null) types = gcnew array<Type^>(0);
@@ -139,7 +139,7 @@ HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
 	return Object2HOBJECT(t->GetMethod(LPSTR2String(name), flags, null, types, null));
 }
 
-HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
+HOBJECT WINAPI CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 {
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
@@ -148,12 +148,12 @@ HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 	return Object2HOBJECT(m->Invoke(HOBJECT2Type(obj, Object), arr));
 }
 
-void Fixed(HOBJECT obj)
+void WINAPI Fixed(HOBJECT obj)
 {
 	Global::FixedList->Add(HOBJECT2Type(obj, Object));
 }
 
-void Free(HOBJECT obj)
+void WINAPI Free(HOBJECT obj)
 {
 	Global::FixedList->Remove(HOBJECT2Type(obj, Object));
 }
