@@ -2,6 +2,7 @@
 #include "UseDotNet.h"
 
 using namespace System;
+using namespace System::IO;
 using namespace System::Reflection;
 using namespace System::Collections::Generic;
 using namespace System::Runtime::InteropServices;
@@ -17,6 +18,7 @@ const BindingFlags BINDING_ALLINSTANCE = BindingFlags::Public | BindingFlags::No
 static ref class Global
 {
 internal:
+	static String^ SystemPath;
 	static List<Object^>^ FixedList;
 	static List<Assembly^>^ LibList;
 	static List<Type^>^ LibTypeList;
@@ -24,6 +26,7 @@ internal:
 
 	static Global()
 	{
+		Global::SystemPath = Environment::GetFolderPath(Environment::SpecialFolder::Windows) + "\\Microsoft.NET\\Framework\\v4.0.30319\\";
 		Global::FixedList = gcnew List<Object^>();
 		Global::LibList = gcnew List<Assembly^>();
 		Global::LibTypeList = gcnew List<Type^>();
@@ -55,23 +58,29 @@ array<T^>^ CArray2array(CArray<HOBJECT> arr)
 	return arr2;
 }
 
-bool WINAPI LoadLibrary(LPSTR path)
+bool LoadLibrary(LPSTR path)
 {
 	Assembly^ assembly;
-	assembly = Assembly::LoadFrom(LPSTR2String(path));
-	if (assembly != null)
+	String^ name = LPSTR2String(path);
+	if (File::Exists(name))
 	{
-		if (!Global::LibList->Contains(assembly))
+	load:
+		assembly = Assembly::LoadFrom(name);
+		if (assembly != null)
 		{
-			Global::LibList->Add(assembly);
-			Global::LibTypeList->AddRange(assembly->GetTypes());
+			if (!Global::LibList->Contains(assembly))
+			{
+				Global::LibList->Add(assembly);
+				Global::LibTypeList->AddRange(assembly->GetTypes());
+			}
+			return true;
 		}
-		return true;
 	}
+	else if (File::Exists(Global::SystemPath + name)) goto load;
 	return false;
 }
 
-HTYPE WINAPI FindType(LPSTR fullname)
+HTYPE FindType(LPSTR fullname)
 {
 	String^ name = LPSTR2String(fullname);
 	Type^ type;
@@ -94,7 +103,7 @@ HTYPE WINAPI FindType(LPSTR fullname)
 	return Object2HOBJECT(type);
 }
 
-HOBJECT WINAPI CreateInstance(HTYPE type, CArray<HOBJECT>* params)
+HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 {
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
@@ -103,7 +112,7 @@ HOBJECT WINAPI CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 	return Object2HOBJECT(obj);
 }
 
-HSTRING WINAPI CreateString(LPSTR str)
+HSTRING CreateString(LPSTR str)
 {
 	return Object2HOBJECT(LPSTR2String(str));
 }
@@ -116,7 +125,7 @@ Method_CreateValueType(Short, short, HSHORT)
 Method_CreateValueType(Float, float, HFLOAT)
 Method_CreateValueType(Double, double, HDOUBLE)
 
-LPSTR WINAPI GetString(HSTRING str)
+LPSTR GetString(HSTRING str)
 {
 	return String2LPSTR(HOBJECT2Type(str, String));
 }
@@ -129,7 +138,7 @@ Method_Object2ValueType(Short, HSHORT, short)
 Method_Object2ValueType(Float, HFLOAT, float)
 Method_Object2ValueType(Double, HDOUBLE, double)
 
-HMETHOD WINAPI FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
+HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
 {
 	array<Type^>^ types;
 	if (args == null) types = gcnew array<Type^>(0);
@@ -139,7 +148,7 @@ HMETHOD WINAPI FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isst
 	return Object2HOBJECT(t->GetMethod(LPSTR2String(name), flags, null, types, null));
 }
 
-HOBJECT WINAPI CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
+HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 {
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
@@ -148,12 +157,12 @@ HOBJECT WINAPI CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 	return Object2HOBJECT(m->Invoke(HOBJECT2Type(obj, Object), arr));
 }
 
-void WINAPI Fixed(HOBJECT obj)
+void Fixed(HOBJECT obj)
 {
 	Global::FixedList->Add(HOBJECT2Type(obj, Object));
 }
 
-void WINAPI Free(HOBJECT obj)
+void Free(HOBJECT obj)
 {
 	Global::FixedList->Remove(HOBJECT2Type(obj, Object));
 }
