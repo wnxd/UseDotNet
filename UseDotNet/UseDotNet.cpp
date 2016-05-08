@@ -76,7 +76,11 @@ bool LoadLibrary(LPSTR path)
 			return true;
 		}
 	}
-	else if (File::Exists(Global::SystemPath + name)) goto load;
+	else
+	{
+		name = Global::SystemPath + name;
+		if (File::Exists(name)) goto load;
+	}
 	return false;
 }
 
