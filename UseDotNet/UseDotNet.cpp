@@ -62,6 +62,7 @@ bool LoadLibrary(LPSTR path)
 {
 	Assembly^ assembly;
 	String^ name = LPSTR2String(path);
+	if (!name->EndsWith(".dll")) name += ".dll";
 	if (File::Exists(name))
 	{
 	load:
