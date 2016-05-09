@@ -5,6 +5,7 @@ using namespace System;
 using namespace System::IO;
 using namespace System::Reflection;
 using namespace System::Collections::Generic;
+using namespace System::Text::RegularExpressions;
 using namespace System::Runtime::InteropServices;
 
 const BindingFlags BINDING_ALL = BindingFlags::Public | BindingFlags::NonPublic | BindingFlags::Instance | BindingFlags::Static;
@@ -51,11 +52,34 @@ HOBJECT Object2HOBJECT(Object^ obj)
 }
 
 template<typename T>
-array<T^>^ CArray2array(CArray<HOBJECT> arr)
+array<T^>^ CArray2array(CArray<HOBJECT>* arr)
 {
-	array<T^>^ arr2 = gcnew array<T^>(arr.Count);
-	for (int i = 0; i < arr.Count; i++) arr2[i] = HOBJECT2Type(arr.List[i], T);
+	array<T^>^ arr2 = gcnew array<T^>(arr->Count);
+	for (int i = 0; i < arr->Count; i++) arr2[i] = HOBJECT2Type(arr->List[i], T);
 	return arr2;
+}
+
+String^ GetFullName(Type^ gt)
+{
+	String^ name = gt->FullName;
+	if (gt->IsGenericType)
+	{
+		array<Type^>^ types = gt->GetGenericArguments();
+		Regex^ regex = gcnew Regex("^(.+?)`" + types->Length + "\\[.+\\]$");
+		Match^ mc = regex->Match(name);
+		if (mc->Success)
+		{
+			name = mc->Groups[1]->Value + "<";
+			for (int i = 0; i < types->Length; i++)
+			{
+				if (i > 0) name += ", ";
+				Type^ T = types[i];
+				name += T->IsGenericType ? GetFullName(T) : T->FullName;
+			}
+			name += ">";
+		}
+	}
+	return name;
 }
 
 bool LoadLibrary(LPSTR path)
@@ -97,7 +121,7 @@ HTYPE FindType(LPSTR fullname)
 		{
 			for each (Type^ t in Global::LibTypeList)
 			{
-				if (t->FullName == name)
+				if (GetFullName(t) == name)
 				{
 					type = t;
 					break;
@@ -112,7 +136,7 @@ HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 {
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
-	else arr = CArray2array<Object>(*params);
+	else arr = CArray2array<Object>(params);
 	Object^ obj = Activator::CreateInstance(HOBJECT2Type(type, Type), arr);
 	return Object2HOBJECT(obj);
 }
@@ -147,7 +171,7 @@ HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
 {
 	array<Type^>^ types;
 	if (args == null) types = gcnew array<Type^>(0);
-	else types = CArray2array<Type>(*args);
+	else types = CArray2array<Type>(args);
 	Type^ t = HOBJECT2Type(type, Type);
 	BindingFlags flags = isstatic ? BINDING_ALLSTATIC : BINDING_ALLINSTANCE;
 	return Object2HOBJECT(t->GetMethod(LPSTR2String(name), flags, null, types, null));
@@ -157,7 +181,7 @@ HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 {
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
-	else arr = CArray2array<Object>(*params);
+	else arr = CArray2array<Object>(params);
 	MethodInfo^ m = HOBJECT2Type(method, MethodInfo);
 	return Object2HOBJECT(m->Invoke(HOBJECT2Type(obj, Object), arr));
 }
