@@ -4,18 +4,23 @@
 #undef LoadLibrary
 #endif
 
+#ifdef CreateEvent
+#undef CreateEvent
+#endif
+
 #define typeof(type) type::typeid
 #define null nullptr
 #define ChangeValueType(prefix, name, intype, outtype) outtype prefix##name(intype vt)
 #define CreateValueType(name, intype, outtype) ChangeValueType(Create, name, intype, outtype)
 #define Method_CreateValueType(name, intype, outtype) CreateValueType(name, intype, outtype) { return Object2HOBJECT(vt); }
 #define Object2ValueType(name, intype, outtype) ChangeValueType(Get, name, intype, outtype)
-#define Method_Object2ValueType(name, intype, outtype) Object2ValueType(name, intype, outtype) { return (outtype)HOBJECT2Type(vt, Object); }
+#define Method_Object2ValueType(name, intype, outtype) Object2ValueType(name, intype, outtype) { return (outtype)HOBJECT2Type<Object>(vt); }
 
 typedef HINSTANCE HOBJECT;
 typedef HOBJECT HTYPE;
 typedef HOBJECT HARRAY;
 typedef HOBJECT HMETHOD;
+typedef HOBJECT HDELEGATE;
 typedef HOBJECT HSTRING;
 typedef HOBJECT HINT;
 typedef HOBJECT HBOOL;
@@ -35,6 +40,8 @@ struct CArray
 EXPORT bool LoadLibrary(LPSTR path);
 EXPORT HTYPE FindType(LPSTR fullname);
 EXPORT HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params);
+EXPORT HDELEGATE CreateDelegate(HTYPE type, int method);
+EXPORT HDELEGATE CreateEvent(HTYPE type, int method);
 EXPORT HSTRING CreateString(LPSTR str);
 EXPORT CreateValueType(Int, int, HINT);
 EXPORT CreateValueType(Bool, bool, HBOOL);
@@ -51,6 +58,7 @@ EXPORT Object2ValueType(Long, HLONG, INT64);
 EXPORT Object2ValueType(Short, HSHORT, short);
 EXPORT Object2ValueType(Float, HFLOAT, float);
 EXPORT Object2ValueType(Double, HDOUBLE, double);
+EXPORT HMETHOD FindDefaultMethod(HTYPE type, LPSTR name);
 EXPORT HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic);
 EXPORT HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params);
 EXPORT void Fixed(HOBJECT obj);

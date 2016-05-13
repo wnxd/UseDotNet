@@ -14,13 +14,15 @@ const BindingFlags BINDING_ALLINSTANCE = BindingFlags::Public | BindingFlags::No
 
 #define String2LPSTR(str) (char*)(void*)Marshal::StringToHGlobalAnsi(str)
 #define LPSTR2String(lpstr) Marshal::PtrToStringAnsi((IntPtr)(void*)lpstr)
-#define HOBJECT2Type(obj, type) *(type^*)&obj
+#define I(hobj) (int)hobj
+
+HOBJECT Object2HOBJECT(Object^ obj);
 
 static ref class Global
 {
 internal:
 	static String^ SystemPath;
-	static List<Object^>^ FixedList;
+	static Dictionary<int, Object^>^ FixedList;
 	static List<Assembly^>^ LibList;
 	static List<Type^>^ LibTypeList;
 	static Dictionary<String^, Type^>^ TypeList;
@@ -28,7 +30,7 @@ internal:
 	static Global()
 	{
 		Global::SystemPath = Environment::GetFolderPath(Environment::SpecialFolder::Windows) + "\\Microsoft.NET\\Framework\\v4.0.30319\\";
-		Global::FixedList = gcnew List<Object^>();
+		Global::FixedList = gcnew Dictionary<int, Object^>();
 		Global::LibList = gcnew List<Assembly^>();
 		Global::LibTypeList = gcnew List<Type^>();
 		Global::TypeList = gcnew Dictionary<String^, Type^>();
@@ -43,6 +45,34 @@ internal:
 		Global::TypeList->Add("string", typeof(String));
 		Global::TypeList->Add("object", typeof(Object));
 		Global::TypeList->Add("type", typeof(Type));
+		Global::TypeList->Add("array", typeof(Array));
+	}
+};
+
+ref class EventHelper
+{
+private:
+	delegate void NativeEvent(HOBJECT sender, HOBJECT e);
+
+	static MethodInfo^ _shellmethod = typeof(EventHelper)->GetMethod("ShellMethod", BINDING_ALLINSTANCE);
+	NativeEvent^ nm;
+	Delegate^ d;
+
+	void ShellMethod(Object^ sender, EventArgs^ e)
+	{
+		this->nm->Invoke(Object2HOBJECT(sender), Object2HOBJECT(e));
+	}
+internal:
+	EventHelper(Type^ type, int method)
+	{
+		this->nm = (NativeEvent^)Marshal::GetDelegateForFunctionPointer(IntPtr(method), typeof(NativeEvent));
+		ConstructorInfo^ ctor = type->GetConstructors()[0];
+		this->d = (Delegate^)ctor->Invoke(gcnew array<Object^> { this, EventHelper::_shellmethod->MethodHandle.GetFunctionPointer() });
+	}
+
+	Delegate^ GetShellMethod()
+	{
+		return d;
 	}
 };
 
@@ -52,10 +82,17 @@ HOBJECT Object2HOBJECT(Object^ obj)
 }
 
 template<typename T>
+T^ HOBJECT2Type(HOBJECT obj)
+{
+	if (Global::FixedList->ContainsKey(I(obj))) return (T^)Global::FixedList[I(obj)];
+	return *(T^*)&obj;
+}
+
+template<typename T>
 array<T^>^ CArray2array(CArray<HOBJECT>* arr)
 {
 	array<T^>^ arr2 = gcnew array<T^>(arr->Count);
-	for (int i = 0; i < arr->Count; i++) arr2[i] = HOBJECT2Type(arr->List[i], T);
+	for (int i = 0; i < arr->Count; i++) arr2[i] = HOBJECT2Type<T>(arr->List[i]);
 	return arr2;
 }
 
@@ -137,8 +174,20 @@ HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
 	else arr = CArray2array<Object>(params);
-	Object^ obj = Activator::CreateInstance(HOBJECT2Type(type, Type), arr);
+	Object^ obj = Activator::CreateInstance(HOBJECT2Type<Type>(type), arr);
 	return Object2HOBJECT(obj);
+}
+
+HDELEGATE CreateDelegate(HTYPE type, int method)
+{
+	Object^ obj = Marshal::GetDelegateForFunctionPointer(IntPtr(method), HOBJECT2Type<Type>(type));
+	return Object2HOBJECT(obj);
+}
+
+HDELEGATE CreateEvent(HTYPE type, int method)
+{
+	EventHelper^ helper = gcnew EventHelper(HOBJECT2Type<Type>(type), method);
+	return Object2HOBJECT(helper->GetShellMethod());
 }
 
 HSTRING CreateString(LPSTR str)
@@ -156,7 +205,7 @@ Method_CreateValueType(Double, double, HDOUBLE)
 
 LPSTR GetString(HSTRING str)
 {
-	return String2LPSTR(HOBJECT2Type(str, String));
+	return String2LPSTR(HOBJECT2Type<String>(str));
 }
 
 Method_Object2ValueType(Int, HINT, int)
@@ -167,12 +216,18 @@ Method_Object2ValueType(Short, HSHORT, short)
 Method_Object2ValueType(Float, HFLOAT, float)
 Method_Object2ValueType(Double, HDOUBLE, double)
 
+HMETHOD FindDefaultMethod(HTYPE type, LPSTR name)
+{
+	Type^ t = HOBJECT2Type<Type>(type);
+	return Object2HOBJECT(t->GetMethod(LPSTR2String(name)));
+}
+
 HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
 {
 	array<Type^>^ types;
 	if (args == null) types = gcnew array<Type^>(0);
 	else types = CArray2array<Type>(args);
-	Type^ t = HOBJECT2Type(type, Type);
+	Type^ t = HOBJECT2Type<Type>(type);
 	BindingFlags flags = isstatic ? BINDING_ALLSTATIC : BINDING_ALLINSTANCE;
 	return Object2HOBJECT(t->GetMethod(LPSTR2String(name), flags, null, types, null));
 }
@@ -182,16 +237,21 @@ HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 	array<Object^>^ arr;
 	if (params == null) arr = gcnew array<Object^>(0);
 	else arr = CArray2array<Object>(params);
-	MethodInfo^ m = HOBJECT2Type(method, MethodInfo);
-	return Object2HOBJECT(m->Invoke(HOBJECT2Type(obj, Object), arr));
+	MethodInfo^ m = HOBJECT2Type<MethodInfo>(method);
+	Object^ o = HOBJECT2Type<Object>(obj);
+	return Object2HOBJECT(m->Invoke(o, arr));
 }
 
 void Fixed(HOBJECT obj)
 {
-	Global::FixedList->Add(HOBJECT2Type(obj, Object));
+	if (!Global::FixedList->ContainsKey(I(obj)))
+	{
+		Object^ o = HOBJECT2Type<Object>(obj);
+		Global::FixedList->Add(I(obj), o);
+	}
 }
 
 void Free(HOBJECT obj)
 {
-	Global::FixedList->Remove(HOBJECT2Type(obj, Object));
+	Global::FixedList->Remove(I(obj));
 }
