@@ -219,7 +219,7 @@ Method_Object2ValueType(Double, HDOUBLE, double)
 HMETHOD FindDefaultMethod(HTYPE type, LPSTR name)
 {
 	Type^ t = HOBJECT2Type<Type>(type);
-	return Object2HOBJECT(t->GetMethod(LPSTR2String(name)));
+	return Object2HOBJECT(t->GetMethod(LPSTR2String(name), BINDING_ALL));
 }
 
 HMETHOD FindMethod(HTYPE type, LPSTR name, CArray<HTYPE>* args, bool isstatic)
@@ -239,7 +239,9 @@ HOBJECT CallMethod(HMETHOD method, HOBJECT obj, CArray<HOBJECT>* params)
 	else arr = CArray2array<Object>(params);
 	MethodInfo^ m = HOBJECT2Type<MethodInfo>(method);
 	Object^ o = HOBJECT2Type<Object>(obj);
-	return Object2HOBJECT(m->Invoke(o, arr));
+	o = m->Invoke(o, arr);
+	if (params != null) for (int i = 0; i < params->Count; i++) params->List[i] = Object2HOBJECT(arr[i]);
+	return Object2HOBJECT(o);
 }
 
 void Fixed(HOBJECT obj)
