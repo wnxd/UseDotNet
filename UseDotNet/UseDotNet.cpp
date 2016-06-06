@@ -29,7 +29,7 @@ internal:
 
 	static Global()
 	{
-		Global::SystemPath = Environment::GetFolderPath(Environment::SpecialFolder::Windows) + "\\Microsoft.NET\\Framework\\v4.0.30319\\";
+		Global::SystemPath = Environment::GetEnvironmentVariable("windir") + "\\Microsoft.NET\\Framework\\v4.0.30319\\";
 		Global::FixedList = gcnew Dictionary<int, Object^>();
 		Global::LibList = gcnew List<Assembly^>();
 		Global::LibTypeList = gcnew List<Type^>();
