@@ -28,7 +28,6 @@ internal:
 	static String^ SystemPath;
 	static Dictionary<int, Object^>^ FixedList;
 	static List<Assembly^>^ LibList;
-	static List<Type^>^ LibTypeList;
 	static Dictionary<String^, Type^>^ TypeList;
 
 	static Global()
@@ -36,7 +35,6 @@ internal:
 		Global::SystemPath = Environment::GetEnvironmentVariable("windir") + "\\Microsoft.NET\\Framework\\v4.0.30319\\";
 		Global::FixedList = gcnew Dictionary<int, Object^>();
 		Global::LibList = gcnew List<Assembly^>();
-		Global::LibTypeList = gcnew List<Type^>();
 		Global::TypeList = gcnew Dictionary<String^, Type^>();
 		Global::TypeList->Add("void", typeof(void));
 		Global::TypeList->Add("byte", typeof(byte));
@@ -177,11 +175,7 @@ bool LoadLibrary(LPSTR path)
 		assembly = Assembly::LoadFrom(name);
 		if (assembly != null)
 		{
-			if (!Global::LibList->Contains(assembly))
-			{
-				Global::LibList->Add(assembly);
-				Global::LibTypeList->AddRange(assembly->GetTypes());
-			}
+			if (!Global::LibList->Contains(assembly)) Global::LibList->Add(assembly);
 			return true;
 		}
 	}
@@ -203,13 +197,10 @@ HTYPE FindType(LPSTR fullname)
 		type = Type::GetType(name);
 		if (type == null)
 		{
-			for each (Type^ t in Global::LibTypeList)
+			for each (Assembly^ assembly in Global::LibList)
 			{
-				if (GetFullName(t) == name)
-				{
-					type = t;
-					break;
-				}
+				type = assembly->GetType(name);
+				if (type != null) break;
 			}
 		}
 	}
