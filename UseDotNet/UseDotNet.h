@@ -30,6 +30,11 @@ typedef HOBJECT HSHORT;
 typedef HOBJECT HFLOAT;
 typedef HOBJECT HDOUBLE;
 
+typedef struct OBJECT
+{
+	LPCVOID unknown[4];
+} *REFOBJECT;
+
 template<typename T>
 struct CArray
 {

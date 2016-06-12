@@ -13,8 +13,12 @@ const BindingFlags BINDING_ALLSTATIC = BindingFlags::Public | BindingFlags::NonP
 const BindingFlags BINDING_ALLINSTANCE = BindingFlags::Public | BindingFlags::NonPublic | BindingFlags::Instance;
 
 #define String2LPSTR(str) (char*)(void*)Marshal::StringToHGlobalAnsi(str)
-#define LPSTR2String(lpstr) Marshal::PtrToStringAnsi((IntPtr)(void*)lpstr)
-#define I(hobj) (int)hobj
+#define LPSTR2String(lpstr) Marshal::PtrToStringAnsi((IntPtr)(void*)(lpstr))
+#define Ptr2IntPtr(ptr) (IntPtr)(void*)(ptr);
+#define IntPtr2Ptr(ptr, type) (type*)(void*)(ptr);
+#define I(hobj) (int)(hobj)
+
+typedef HOBJECT(*OBJECT2HOBJECT)(OBJECT obj);
 
 HOBJECT Object2HOBJECT(Object^ obj);
 
@@ -49,6 +53,49 @@ internal:
 	}
 };
 
+ref class DelegateHelper
+{
+private:
+	delegate void NativeDelegate();
+
+	static FieldInfo^ _methodPtr = typeof(Delegate)->GetField("_methodPtr", BINDING_ALLINSTANCE);
+	static MethodInfo^ _shellmethod = typeof(DelegateHelper)->GetMethod("ShellMethod", BINDING_ALLSTATIC);
+
+	static void ShellMethod()
+	{
+
+	}
+
+	Delegate^ d;
+	Delegate^ shell;
+	LPBYTE ptr;
+internal:
+	DelegateHelper(Type^ type, int method)
+	{
+		const BYTE c_asm[] = { 0x55, 0x89, 0xE5, 0x51, 0x52, 0xB8, 0xFF, 0x00, 0x00, 0x00, 0x85, 0xC0, 0x74, 0x0F, 0x48, 0x74, 0x0B, 0x89, 0xC1, 0x31, 0xC0, 0xFF, 0x74, 0x85, 0x08, 0x40, 0xE2, 0xF9, 0x52, 0xE8, 0xDD, 0xFF, 0x00, 0x00, 0x5A, 0x59, 0xC9, 0xC3 };
+		this->ptr = (LPBYTE)malloc(38);
+		VirtualProtect(this->ptr, 38, PAGE_EXECUTE_READWRITE, NULL);
+		memcpy(this->ptr, c_asm, 38);
+		int count = type->GetMethod("Invoke")->GetParameters()->GetLength(0);
+		*(LPINT)(this->ptr + 6) = count;
+		*(LPINT)(this->ptr + 30) = method - (int)(this->ptr + 34);
+		this->d = Marshal::GetDelegateForFunctionPointer(IntPtr(this->ptr), type);
+		this->shell = Delegate::CreateDelegate(typeof(NativeDelegate), DelegateHelper::_shellmethod);
+		IntPtr methodPtr = (IntPtr)this->_methodPtr->GetValue(this->shell);
+		this->_methodPtr->SetValue(this->d, methodPtr);
+	}
+
+	~DelegateHelper()
+	{
+		free(this->ptr);
+	}
+
+	Delegate^ GetShellMethod()
+	{
+		return this->d;
+	}
+};
+
 ref class EventHelper
 {
 private:
@@ -72,7 +119,7 @@ internal:
 
 	Delegate^ GetShellMethod()
 	{
-		return d;
+		return this->d;
 	}
 };
 
@@ -180,8 +227,8 @@ HOBJECT CreateInstance(HTYPE type, CArray<HOBJECT>* params)
 
 HDELEGATE CreateDelegate(HTYPE type, int method)
 {
-	Object^ obj = Marshal::GetDelegateForFunctionPointer(IntPtr(method), HOBJECT2Type<Type>(type));
-	return Object2HOBJECT(obj);
+	DelegateHelper^ helper = gcnew DelegateHelper(HOBJECT2Type<Type>(type), method);
+	return Object2HOBJECT(helper->GetShellMethod());
 }
 
 HDELEGATE CreateEvent(HTYPE type, int method)
